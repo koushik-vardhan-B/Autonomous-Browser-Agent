@@ -1,5 +1,5 @@
 def main():
-    print("Hello from mn-project!")
+    print("Hello from autonomous-browser-agent!")
 
 
 if __name__ == "__main__":
