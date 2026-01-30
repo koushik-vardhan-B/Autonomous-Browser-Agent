@@ -2,7 +2,7 @@ from langchain_core.tools import tool
 from browser_manager import browser_manager
 
 @tool 
-def scroll_on_screen():
+def scroll_one_screen():
     """Scrolls down one screen."""
     page = browser_manager.get_page()
     if page:
