@@ -1,9 +1,12 @@
-from browser_manager import browser_manager
+# BrowserManager - Singleton browser instance management
 from socket import timeout
 from sys import _current_exceptions
 from playwright.sync_api import sync_playwright, Page, BrowserContext
 from typing import Optional
 import os
+from browser_agent.observability.logger import get_logger
+
+_logger = get_logger("BrowserManager")
 
 class BrowserManager:
     """Singleton class to manage browser and page instances globally."""
@@ -31,6 +34,7 @@ class BrowserManager:
         - If the site_name matches the open browser, it just navigates (FAST).
         - If the site_name is different, it closes the old one and opens the new profile.
         """
+        _logger.info(f"Starting browser for '{site_name}' -> {url}", agent="Browser")
         try:
             safe_site_name = "".join([c for c in site_name if c.isalnum() or c in ('-','_',)]).strip()
             if not safe_site_name: safe_site_name = "default"
@@ -40,6 +44,7 @@ class BrowserManager:
                 self.close_browser()
             
             if self._page and not self._page.is_closed():
+                _logger.debug(f"Navigating existing {safe_site_name} session to {url}", agent="Browser")
                 print(f">>> Navigate Existing {safe_site_name} session to {url}")
                 try:
                     self._page.goto(url, wait_until="domcontentloaded", timeout = 60000)
@@ -70,14 +75,17 @@ class BrowserManager:
             self._page = self._browser.pages[0]
             self._page.goto(url, wait_until="domcontentloaded", timeout=60000)
 
+            _logger.info(f"Browser launched for '{safe_site_name}' -> {url}", agent="Browser")
             return f"Browser started for {safe_site_name}"
 
         except Exception as e:
+            _logger.error(f"Error opening browser: {e}", agent="Browser")
             self.close_browser()
             return f"Error opening browser: {str(e)}"
 
     def close_browser(self) -> str:
         """Safe cleanup."""
+        _logger.info("Closing browser...", agent="Browser")
         try:
             if self._page:
                 try: self._page.close()

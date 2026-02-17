@@ -37,16 +37,16 @@ class OllamaProvider(BaseLLMProvider):
         try:
             response = requests.get(base_url, timeout=timeout)
             if response.status_code == 200:
-                print(">>> ✅ Ollama detected and running.")
+                print(">>> [OK] Ollama detected and running.")
                 cls._is_available = True
             else:
-                print(f">>> ⚠️ Ollama returned unexpected status: {response.status_code}")
+                print(f">>> [WARN] Ollama returned unexpected status: {response.status_code}")
                 cls._is_available = False
         except requests.exceptions.ConnectionError:
-            print(">>> ❌ Ollama not detected (ConnectionError).")
+            print(">>> [ERROR] Ollama not detected (ConnectionError).")
             cls._is_available = False
         except Exception as e:
-            print(f">>> ❌ Error checking Ollama: {e}")
+            print(f">>> [ERROR] Error checking Ollama: {e}")
             cls._is_available = False
         
         cls._availability_checked = True

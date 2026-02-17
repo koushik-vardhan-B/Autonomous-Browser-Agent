@@ -42,12 +42,12 @@ I will provide you with two things:
 3. **AVOID** selectors containing classes like `.drawer`, `.modal`, `.popup`, `.hidden`, `.overlay` unless explicitly asked
 
 **Example - Login Button:**
-- ✅ CORRECT: `a[title="Jobseeker Login"]` (visible link in header/nav)
-- ✅ CORRECT: `.header a:has-text("Login")` (visible header link)  
-- ✅ CORRECT: `nav a[href*="login"]` (navigation link)
-- ❌ WRONG: `.modal form button.loginButton` (inside unopened modal)
-- ❌ WRONG: `.drawer .login-layer .loginButton` (inside hidden drawer)
-- ❌ WRONG: `.popup-content button` (inside popup overlay)
+- [OK] CORRECT: `a[title="Jobseeker Login"]` (visible link in header/nav)
+- [OK] CORRECT: `.header a:has-text("Login")` (visible header link)  
+- [OK] CORRECT: `nav a[href*="login"]` (navigation link)
+- [ERROR] WRONG: `.modal form button.loginButton` (inside unopened modal)
+- [ERROR] WRONG: `.drawer .login-layer .loginButton` (inside hidden drawer)
+- [ERROR] WRONG: `.popup-content button` (inside popup overlay)
 
 **How to distinguish visible vs hidden elements:**
 - **Visible**: In `<header>`, `<nav>`, or top-level `<div>` with classes like `header`, `navbar`, `top-bar`, `main-content`

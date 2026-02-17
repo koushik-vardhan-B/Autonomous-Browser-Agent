@@ -1,5 +1,5 @@
 from langchain_core.tools import tool
-from browser_manager import browser_manager
+from browser_agent.browser.manager import browser_manager
 from .base import get_som_state, set_som_state
 
 

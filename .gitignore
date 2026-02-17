@@ -8,3 +8,10 @@ wheels/
 
 # Virtual environments
 .venv
+.env
+uv.lock
+
+# Logs and browser profiles
+agent.log
+error.log
+profiles/

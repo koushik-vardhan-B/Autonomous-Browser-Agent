@@ -8,7 +8,7 @@ from typing import List, Dict, Any
 from langchain_core.tools import tool
 
 
-def extract_json_from_markdown(text: str) -> str:
+def extract_json_from_markdown(text) -> str:
     """
     Extract JSON from markdown code blocks like ```json ... ```
     
@@ -18,6 +18,9 @@ def extract_json_from_markdown(text: str) -> str:
     Returns:
         Extracted JSON string or original text if no code blocks found
     """
+    if not text:
+        return "{}"
+    text = str(text)
     # Try to find JSON in markdown code blocks
     pattern = r'```(?:json)?\s*\n?(.*?)\n?```'
     match = re.search(pattern, text, re.DOTALL)

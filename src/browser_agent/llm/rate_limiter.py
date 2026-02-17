@@ -5,6 +5,9 @@ API key rotation and rate limit handling.
 import os
 from typing import List, Tuple, Optional
 from dotenv import load_dotenv
+import logging
+
+_logger = logging.getLogger("RateLimiter")
 
 load_dotenv()
 
@@ -32,13 +35,14 @@ class APIKeyRotator:
             if key:
                 self._groq_keys.append(key)
         
-        # Load SambaNova keys (SAMBANOVA_API_KEY1 to SAMBANOVA_API_KEY3)
-        for i in range(1, 4):
+        # Load SambaNova keys (SAMBANOVA_API_KEY1 to SAMBANOVA_API_KEY5)
+        for i in range(1, 6):
             key = os.getenv(f"SAMBANOVA_API_KEY{i}")
             if key:
                 self._sambanova_keys.append(key)
         
-        print(f">>> 🔑 Loaded API Keys: Gemini={len(self._gemini_keys)}, Groq={len(self._groq_keys)}, SambaNova={len(self._sambanova_keys)}")
+        _logger.info(f"Loaded API Keys: Gemini={len(self._gemini_keys)}, Groq={len(self._groq_keys)}, SambaNova={len(self._sambanova_keys)}")
+        print(">>> [Keys] Loaded: Gemini=%d, Groq=%d, SambaNova=%d" % (len(self._gemini_keys), len(self._groq_keys), len(self._sambanova_keys)))
     
     def get_gemini_keys(self) -> List[str]:
         """Return all Gemini API keys."""

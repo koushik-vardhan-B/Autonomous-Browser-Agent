@@ -385,7 +385,7 @@ def get_central_agent_prompt3(user_input: str, previous_errors: str | None, form
 You are the **Browser Automation Architect**.
 Your goal is to break a request into a strictly ordered list of natural language steps.
 
-### 👁️ CURRENT PAGE STATE (GROUNDING)
+### 👁 CURRENT PAGE STATE (GROUNDING)
 The browser is currently looking at:
 {current_page_state}
 

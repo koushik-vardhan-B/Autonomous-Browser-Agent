@@ -10,7 +10,7 @@ from ..base import BaseLLMProvider
 class GeminiProvider(BaseLLMProvider):
     """Google Gemini LLM provider."""
     
-    def __init__(self, model: str = "gemini-2.0-flash-exp", temperature: float = 0.1):
+    def __init__(self, model: str = "gemini-2.0-flash", temperature: float = 0.1):
         self.model = model
         self.temperature = temperature
     

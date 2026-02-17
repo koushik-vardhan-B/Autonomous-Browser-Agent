@@ -1,14 +1,12 @@
-import sys
-from pathlib import Path
-
-# Ensure browser_agent is importable when Streamlit runs this in its own subprocess
-_src_dir = str(Path(__file__).resolve().parent.parent.parent)  # -> src/
-if _src_dir not in sys.path:
-    sys.path.insert(0, _src_dir)
+"""
+Streamlit UI for the Autonomous Browser Agent.
+"""
 
 import streamlit as st
 import json
+import re
 from datetime import datetime
+
 from browser_agent.orchestration import run_agent
 from browser_agent.browser.manager import browser_manager
 
@@ -146,7 +144,6 @@ with tab1:
                         try:
                             if isinstance(output_content, str):
                                 # Try to extract JSON from the output
-                                import re
                                 json_match = re.search(r'\{.*\}', output_content, re.DOTALL)
                                 if json_match:
                                     parsed_output = json.loads(json_match.group())

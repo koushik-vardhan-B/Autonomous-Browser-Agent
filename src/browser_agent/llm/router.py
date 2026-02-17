@@ -9,6 +9,9 @@ from langchain_core.language_models import BaseChatModel
 
 from .providers import GeminiProvider, GroqProvider, SambanovaProvider, OllamaProvider
 from .rate_limiter import api_key_rotator
+from browser_agent.observability.logger import get_logger
+
+_logger = get_logger("LLMRouter")
 
 
 class LLMRouter:
@@ -26,6 +29,7 @@ class LLMRouter:
     
     def __init__(self):
         if not hasattr(self, '_initialized'):
+            _logger.info("Initializing LLM Router...", agent="LLMRouter")
             self.gemini_provider = GeminiProvider()
             self.groq_provider = GroqProvider()
             self.sambanova_provider = SambanovaProvider()
@@ -57,7 +61,7 @@ class LLMRouter:
                     llm = self.gemini_provider.get_model(api_key=key)
                     rotation_list.append((f"gemini_llm{idx}", llm))
                 except Exception as e:
-                    print(f"❌ Failed to initialize gemini_llm{idx}: {e}")
+                    print(f"[ERROR] Failed to initialize gemini_llm{idx}: {e}")
         
         # Add Groq keys (if no provider specified or provider="groq")
         if provider is None or provider == "groq":
@@ -67,17 +71,17 @@ class LLMRouter:
                     llm = self.groq_provider.get_model(api_key=key)
                     rotation_list.append((f"groq_llm{idx}", llm))
                 except Exception as e:
-                    print(f"❌ Failed to initialize groq_llm{idx}: {e}")
+                    print(f"[ERROR] Failed to initialize groq_llm{idx}: {e}")
         
-        # Add SambaNova keys (if provider="sambanova")
-        if provider == "sambanova":
+        # Add SambaNova keys (if no provider specified or provider="sambanova")
+        if provider is None or provider == "sambanova":
             sambanova_keys = api_key_rotator.get_sambanova_keys()
             for idx, key in enumerate(sambanova_keys, start=1):
                 try:
                     llm = self.sambanova_provider.get_model(api_key=key)
                     rotation_list.append((f"sambanova{idx}", llm))
                 except Exception as e:
-                    print(f"❌ Failed to initialize sambanova{idx}: {e}")
+                    print(f"[ERROR] Failed to initialize sambanova{idx}: {e}")
         
         # Add Ollama (if provider="ollama")
         if provider == "ollama":
@@ -86,13 +90,86 @@ class LLMRouter:
                     llm = self.ollama_provider.get_model()
                     rotation_list.append(("ollama_text", llm))
                 except Exception as e:
-                    print(f"❌ Failed to initialize Ollama text: {e}")
+                    print(f"[ERROR] Failed to initialize Ollama text: {e}")
         
         if not rotation_list:
             provider_msg = f" for provider '{provider}'" if provider else ""
             raise ValueError(f"No valid API keys found for main LLM rotation{provider_msg}")
         
         # Rotate based on start_index
+        if start_index > 0:
+            rotation_list = rotation_list[start_index:] + rotation_list[:start_index]
+        
+        return rotation_list
+    
+    def get_execution_llm_with_rotation(
+        self, 
+        start_index: int = 0, 
+        provider: Optional[str] = None
+    ) -> List[Tuple[str, BaseChatModel]]:
+        """
+        Get LLM instances optimized for TOOL CALLING / execution tasks.
+        Uses dedicated tool-use models where available.
+        
+        - Gemini: gemini-2.0-flash (supports tool calling natively)
+        - Groq: llama-3-groq-70b-tool-use (dedicated tool-use model)
+        - SambaNova: gpt-oss-120b (default)
+        
+        Args:
+            start_index: Starting index for rotation
+            provider: Optional provider filter
+            
+        Returns:
+            List of (model_name, llm_instance) tuples
+        """
+        rotation_list = []
+        
+        # Gemini (tool calling works natively)
+        if provider is None or provider == "gemini":
+            gemini_keys = api_key_rotator.get_gemini_keys()
+            for idx, key in enumerate(gemini_keys, start=1):
+                try:
+                    llm = self.gemini_provider.get_model(api_key=key)
+                    rotation_list.append((f"gemini_llm{idx}", llm))
+                except Exception as e:
+                    print(f"[ERROR] Failed to initialize gemini_llm{idx}: {e}")
+        
+        # Groq — use dedicated tool-use model
+        if provider is None or provider == "groq":
+            groq_keys = api_key_rotator.get_groq_keys()
+            for idx, key in enumerate(groq_keys, start=1):
+                try:
+                    llm = self.groq_provider.get_model(
+                        api_key=key,
+                        model="llama-3.3-70b-versatile"
+                    )
+                    rotation_list.append((f"groq_tool{idx}", llm))
+                except Exception as e:
+                    print(f"[ERROR] Failed to initialize groq_tool{idx}: {e}")
+        
+        # SambaNova
+        if provider is None or provider == "sambanova":
+            sambanova_keys = api_key_rotator.get_sambanova_keys()
+            for idx, key in enumerate(sambanova_keys, start=1):
+                try:
+                    llm = self.sambanova_provider.get_model(api_key=key)
+                    rotation_list.append((f"sambanova{idx}", llm))
+                except Exception as e:
+                    print(f"[ERROR] Failed to initialize sambanova{idx}: {e}")
+        
+        # Ollama
+        if provider == "ollama":
+            if OllamaProvider.check_availability():
+                try:
+                    llm = self.ollama_provider.get_model()
+                    rotation_list.append(("ollama_text", llm))
+                except Exception as e:
+                    print(f"[ERROR] Failed to initialize Ollama text: {e}")
+        
+        if not rotation_list:
+            provider_msg = f" for provider '{provider}'" if provider else ""
+            raise ValueError(f"No valid API keys found for execution LLM rotation{provider_msg}")
+        
         if start_index > 0:
             rotation_list = rotation_list[start_index:] + rotation_list[:start_index]
         
@@ -119,9 +196,9 @@ class LLMRouter:
             try:
                 llm = self.ollama_provider.get_model(model="llama3.2-vision:11b")
                 rotation_list.append(("ollama_vision", llm))
-                print(">>> ✅ Added Ollama to vision rotation (priority)")
+                print(">>> [OK] Added Ollama to vision rotation (priority)")
             except Exception as e:
-                print(f"❌ Failed to initialize Ollama vision: {e}")
+                print(f"[ERROR] Failed to initialize Ollama vision: {e}")
         
         # Add Groq vision keys as fallback
         groq_keys = api_key_rotator.get_groq_keys()
@@ -133,7 +210,7 @@ class LLMRouter:
                 )
                 rotation_list.append((f"groq_llm{idx}_vision", llm))
             except Exception as e:
-                print(f"❌ Failed to initialize groq_llm{idx} vision: {e}")
+                print(f"[ERROR] Failed to initialize groq_llm{idx} vision: {e}")
         
         if not rotation_list:
             raise ValueError("No valid vision LLM available (Ollama or Groq)")
@@ -182,23 +259,25 @@ def validate_config():
     print("--- Validating LLM Configuration ---")
     try:
         LLMConfig.get_main_llm()
-        print("✅ Main LLM (Gemini) Configured")
+        print("[OK] Main LLM (Gemini) Configured")
     except Exception as e:
-        print(f"❌ Main LLM Config Error: {e}")
+        print(f"[ERROR] Main LLM Config Error: {e}")
 
     # Check Vision
     is_ollama = OllamaProvider.check_availability()
     if not is_ollama:
-        print("⚠️  Ollama not available. Checking Groq fallback...")
+        print("[WARN]  Ollama not available. Checking Groq fallback...")
         try:
             LLMConfig.get_vision_llm()
-            print("✅ Vision Fallback (Groq) Configured")
+            print("[OK] Vision Fallback (Groq) Configured")
         except Exception as e:
-            print(f"❌ Vision Config Error: {e}")
+            print(f"[ERROR] Vision Config Error: {e}")
     else:
-        print("✅ Vision LLM (Ollama) Configured")
+        print("[OK] Vision LLM (Ollama) Configured")
     print("------------------------------------")
 
 
 if __name__ == "__main__":
     validate_config()
+
+
