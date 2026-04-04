@@ -15,7 +15,8 @@ from .execution import (
     get_navigator_prompt,
     get_autonomous_browser_prompt2,
     get_autonomous_browser_prompt3,
-    get_autonomous_browser_prompt4
+    get_autonomous_browser_prompt4,
+    get_autonomous_browser_prompt5
 )
 
 from .analysis import (
@@ -32,11 +33,12 @@ __all__ = [
     "get_central_agent_prompt4",
     "get_central_agent_prompt5",
     
-    # Execution prompts (4 versions)
+    # Execution prompts (5 versions)
     "get_navigator_prompt",
     "get_autonomous_browser_prompt2",
     "get_autonomous_browser_prompt3",
     "get_autonomous_browser_prompt4",
+    "get_autonomous_browser_prompt5",
     
     # Analysis prompts
     "get_code_analysis_prompt",

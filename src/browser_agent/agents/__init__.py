@@ -1,29 +1,26 @@
 """
 Browser automation agents.
+
+Note: The primary agent functions (central_agent1, execution_agent, 
+redirector, output_formatting_agent) live in orchestration.py.
+This module contains supporting agents (RAG, validation, base classes).
 """
 
-from .planner import central_agent1, get_current_browser_info
-from .executor import execution_agent
-from .formatter import output_formatting_agent
 from .rag import rag, retrieve_errors, get_vector_db
-from .redirector import redirector
+from .base import BaseAgent, AgentResult
+from .validator import ValidationAgent, validate_output
 
 __all__ = [
-    # Planning
-    "central_agent1",
-    "get_current_browser_info",
-    
-    # Execution
-    "execution_agent",
-    
-    # Formatting
-    "output_formatting_agent",
-    
     # RAG
     "rag",
     "retrieve_errors",
     "get_vector_db",
     
-    # Routing
-    "redirector"
+    # Base
+    "BaseAgent",
+    "AgentResult",
+    
+    # Validation
+    "ValidationAgent",
+    "validate_output",
 ]

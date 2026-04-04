@@ -14,6 +14,12 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 from browser_agent.observability.logger import setup_logging, get_log_paths
 from browser_agent.orchestration import run_agent
 
+# Expose FastAPI app for 'uvicorn main:app --reload'
+try:
+    from browser_agent.api.app import app
+except ImportError:
+    pass
+
 
 def main():
     """
@@ -26,7 +32,9 @@ def main():
 Examples:
   python main.py "Open google.com and search for Python tutorials"
   python main.py "Go to amazon.com and find the price of iPhone 15"
-  python main.py "Navigate to news.ycombinator.com and extract the top 5 story titles"
+  python main.py --api                          # Launch FastAPI backend
+  python main.py --api --port 3000               # Custom port
+  python main.py --ui                            # Launch Streamlit UI
         """
     )
     
@@ -41,6 +49,19 @@ Examples:
         "--ui",
         action="store_true",
         help="Launch Streamlit UI instead of CLI mode"
+    )
+    
+    parser.add_argument(
+        "--api",
+        action="store_true",
+        help="Launch FastAPI backend server"
+    )
+    
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="Port for API server (default: 8000)"
     )
     
     parser.add_argument(
@@ -64,6 +85,19 @@ Examples:
             sys.executable, "-m", "streamlit", "run",
             str(Path(__file__).parent / "src" / "browser_agent" / "ui" / "streamlit_app.py")
         ])
+        return
+    
+    # Launch API mode
+    if args.api:
+        print(f">>> Launching FastAPI server on port {args.port}...")
+        import uvicorn
+        uvicorn.run(
+            "browser_agent.api.app:app",
+            host="0.0.0.0",
+            port=args.port,
+            reload=False,
+            log_level="info"
+        )
         return
     
     # Test mode

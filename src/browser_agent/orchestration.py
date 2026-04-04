@@ -24,7 +24,10 @@ try:
 except ImportError:
     # Fallback for newer LangChain versions
     from langchain_core.agents import AgentExecutor, create_tool_calling_agent
-from langchain_community.tools.tavily_search import TavilySearchResults
+try:
+    from langchain_tavily import TavilySearch
+except ImportError:
+    from langchain_community.tools.tavily_search import TavilySearchResults as TavilySearch
 try:
     from langchain_community.vectorstores import Chroma
     from langchain_huggingface import HuggingFaceEmbeddings
@@ -37,7 +40,7 @@ from langgraph.types import Command
 import operator
 
 # Import from new modular structure
-from .prompts import get_central_agent_prompt2, get_autonomous_browser_prompt4, get_central_agent_prompt5
+from .prompts import get_central_agent_prompt2, get_autonomous_browser_prompt5, get_central_agent_prompt5
 from .browser.manager import browser_manager
 from .llm import LLMConfig
 from .browser.tools import (
@@ -57,8 +60,10 @@ from .browser.tools import (
 )
 from .browser.analysis import (
     open_browser, close_browser,
-    extract_and_analyze_selectors, analyze_using_vision, scrape_data_using_text
+    extract_and_analyze_selectors, analyze_using_vision, scrape_data_using_text,
+    observe_page
 )
+from .browser.tools import smart_click, smart_type
 from .core.schemas import Step, SupervisorOutput
 from .observability.logger import get_logger
 
@@ -233,7 +238,11 @@ THE CURRENT PAGE STATE IS:
 ### INSTRUCTIONS FOR PHASE 2:
 1. Review the 'COMPLETED HISTORY' and 'DATA EXTRACTED'.
 2. Plan the **NEXT** logical actions based on the extracted data.
-- Example: If we extracted "Gladiator 2" from IMDB, your next steps should be "Go to YouTube" and "Search for Gladiator 2".
+   - **CRITICAL: You MUST substitute actual extracted values into your step queries!**
+   - **NEVER use placeholders** like [creator name], [title], <TITLE>,  etc.
+   - **ALWAYS use the real data** from the extracted results above.
+   - GOOD: If extracted creator=Guido van Rossum, write: Search for Guido van Rossum programming language interview
+   - BAD: Search for [creator name] programming language interview - WRONG, uses placeholder!
 3. **DO NOT** repeat the completed steps.
 4. If this next phase also requires a pause for data extraction, the FINAL step of this plan should be agent='PLANNER'.
 5. If the task is fully complete, the final step should be agent='end'.
@@ -298,12 +307,8 @@ THE CURRENT PAGE STATE IS:
         MessagesPlaceholder(variable_name="agent_scratchpad")
     ])
 
-    # Get Tavily API key from environment
-    tavily_key = os.getenv("TAVILY_API_KEY")
-    if not tavily_key:
-        raise ValueError("TAVILY_API_KEY not found in environment variables")
-    
-    tavily = TavilySearchResults(tavily_api_key=tavily_key)
+    # TavilySearch reads TAVILY_API_KEY from environment automatically
+    tavily = TavilySearch(max_results=5)
     tools = [tavily, close_browser]
 
     # Sanitize message history
@@ -396,9 +401,9 @@ THE CURRENT PAGE STATE IS:
             error_str = str(e).lower()
             last_error = str(e)
             
-            if "429" in error_str or "413" in error_str or "rate limit" in error_str or "quota" in error_str or "resource_exhausted" in error_str or "request too large" in error_str or "empty output" in error_str:
-                logger.warning(f"Rate limit / size limit hit on {model_name}, rotating...", agent="Planner")
-                print(f">>> [WARN] Rate limit or transient error on {model_name}, rotating to next key...")
+            if "429" in error_str or "413" in error_str or "rate limit" in error_str or "quota" in error_str or "resource_exhausted" in error_str or "request too large" in error_str or "empty output" in error_str or "extra data" in error_str or "expecting value" in error_str or "jsondecodeerror" in error_str or "404" in error_str or "not found" in error_str or "no longer available" in error_str or "does not exist" in error_str or "model_not_found" in error_str or "deprecated" in error_str:
+                logger.warning(f"Rate limit / model issue on {model_name}: {str(e)[:100]}, rotating...", agent="Planner")
+                print(f">>> [WARN] Transient/model error on {model_name}, rotating to next key...")
                 continue
             else:
                 logger.agent_error("Planner", f"Planning error: {e}")
@@ -431,7 +436,28 @@ def redirector(state):
     
     if index >= len(plan):
         print("Plan execution completed.")
-        return Command(goto=END)
+        # Compile output before ending (same logic as "end" step)
+        existing_output = state.get("Output", "")
+        if existing_output and existing_output.strip():
+            final_output = existing_output
+        else:
+            final_output = ""
+            if state.get("output_content"):
+                final_output = "\n\n".join(state["output_content"])
+            if not final_output and state.get("execution_messages"):
+                last_msg = state["execution_messages"][-1]
+                final_output = last_msg.content if hasattr(last_msg, 'content') else str(last_msg)
+            if not final_output and state.get("messages"):
+                summaries = []
+                for msg in state["messages"]:
+                    content = msg.content if hasattr(msg, 'content') else str(msg)
+                    if content and "CRASHED" not in content:
+                        summaries.append(content)
+                final_output = "\n".join(summaries[-3:]) if summaries else "Task completed but no output was captured."
+            if not final_output:
+                final_output = "Task completed successfully."
+        print(f">>> END: Final output ({len(final_output)} chars)")
+        return Command(goto=END, update={"Output": final_output})
 
     step = plan[index]
     logger.step("Redirector", index + 1, f"[{step['agent']}] {step['query'][:80]}")
@@ -460,7 +486,39 @@ def redirector(state):
         new_content_list = state["output_content"] + [content_to_append] if content_to_append else state["output_content"]
         return Command(goto="output_agent", update={**next_step_update, "output_agent_messages": [new_msg], "output_content": new_content_list})
     elif step["agent"] == "end":
-        return Command(goto=END, update={"step_index": 0, "plan": []})
+        # Check if Output was already set (e.g. by output_formatting_agent)
+        existing_output = state.get("Output", "")
+        
+        if existing_output and existing_output.strip():
+            # Output already formatted — keep it
+            final_output = existing_output
+        else:
+            # No formatted output yet — compile from execution results
+            final_output = ""
+            
+            # Prefer extracted/structured data from output_content
+            if state.get("output_content"):
+                final_output = "\n\n".join(state["output_content"])
+            
+            # Fall back to last executor message if no structured data
+            if not final_output and state.get("execution_messages"):
+                last_msg = state["execution_messages"][-1]
+                final_output = last_msg.content if hasattr(last_msg, 'content') else str(last_msg)
+            
+            # Last resort: summarize from all messages
+            if not final_output and state.get("messages"):
+                summaries = []
+                for msg in state["messages"]:
+                    content = msg.content if hasattr(msg, 'content') else str(msg)
+                    if content and "CRASHED" not in content:
+                        summaries.append(content)
+                final_output = "\n".join(summaries[-3:]) if summaries else "Task completed but no output was captured."
+            
+            if not final_output:
+                final_output = "Task completed successfully."
+        
+        print(f">>> END: Final output ({len(final_output)} chars)")
+        return Command(goto=END, update={"step_index": 0, "plan": [], "Output": final_output})
     else:
         error_msg = f"Error at step {index}: Unknown agent {step['agent']}"
         return Command(
@@ -487,16 +545,19 @@ def execution_agent(state):
         else:
             sanitized_history.append(HumanMessage(content=str(msg.content)))
     
-    # Get Tavily API key from environment
-    tavily_key = os.getenv("TAVILY_API_KEY")
-    if not tavily_key:
-        raise ValueError("TAVILY_API_KEY not found in environment variables")
-    
-    tavily = TavilySearchResults(tavily_api_key=tavily_key)
+    # TavilySearch reads TAVILY_API_KEY from environment automatically
+    tavily = TavilySearch(max_results=5)
     tools = [
         tavily,
+        # Vision & observation
+        observe_page,
+        analyze_using_vision,
         enable_vision_overlay,
         find_element_ids,
+        # Smart interaction (finds elements by description)
+        smart_click,
+        smart_type,
+        # Core browser tools
         click_id,
         fill_id,
         scroll_one_screen,
@@ -504,7 +565,6 @@ def execution_agent(state):
         get_page_text,
         open_browser,
         scrape_data_using_text,
-        analyze_using_vision,
         extract_and_analyze_selectors,
         hover_element,
         get_visible_input_fields,
@@ -524,12 +584,12 @@ def execution_agent(state):
             logger.llm_call(model_name.split('/')[0] if '/' in model_name else model_name, model_name, start_index + idx)
             print(f"\n>>> Execution Agent trying {model_name} (index {start_index + idx})...")
             
-            agent = create_tool_calling_agent(current_llm, tools, get_autonomous_browser_prompt4())
+            agent = create_tool_calling_agent(current_llm, tools, get_autonomous_browser_prompt5())
             agent_executor = AgentExecutor(
                 agent=agent,
                 tools=tools,
                 verbose=True,
-                max_iterations=30,
+                max_iterations=50,  # v5 needs more iterations for Think→Act→Observe loop
                 handle_parsing_errors=True,
                 return_intermediate_steps=True
             )
@@ -543,16 +603,21 @@ def execution_agent(state):
             
             output_text = result.get("output", "") or ""
             print("\n>>> FINAL OUTPUT:")
-            output_lower = output_text.lower()
-            trigger_word = next((w for w in ["unable", "error", "couldn't", "failed", "execution failed"] if w in output_lower), None)
+            output_lower = output_text.lower().strip()
             
-            if trigger_word:
-                if "no error" not in output_lower:
-                    print(f"\n>>> Execution Agent Error: Detected potential failure keyword '{trigger_word}'")
-                    return Command(
-                        update={"last_error": output_text, "current_model_index": successful_index},
-                        goto="planner"
-                    )
+            # Only flag as error if the output STARTS with an error indicator
+            # or is very short and contains failure words (i.e., the whole output IS the error)
+            is_short_error = len(output_text) < 200 and any(
+                w in output_lower for w in ["unable", "couldn't", "execution failed"]
+            )
+            is_explicit_error = output_lower.startswith("error") or output_lower.startswith("failed")
+            
+            if (is_short_error or is_explicit_error) and "no error" not in output_lower:
+                print(f"\n>>> Execution Agent Error: Detected failure in output")
+                return Command(
+                    update={"last_error": output_text, "current_model_index": successful_index},
+                    goto="planner"
+                )
             
             new_msg = ChatMessage(role="execution_agent", content=output_text)
             
@@ -561,7 +626,7 @@ def execution_agent(state):
             
             if "intermediate_steps" in result:
                 for action, observation in result["intermediate_steps"]:
-                    if action.tool in ["scrape_data_using_text", "analyze_using_vision", "extract_and_analyze_selectors"]:
+                    if action.tool in ["scrape_data_using_text", "analyze_using_vision", "extract_and_analyze_selectors", "observe_page"]:
                         content = json.dumps(observation) if isinstance(observation, (dict, list)) else str(observation)
                         extracted_data.append(content)
 
@@ -577,11 +642,11 @@ def execution_agent(state):
             error_str = str(e).lower()
             last_error = str(e)
             
-            if "429" in error_str or "413" in error_str or "rate limit" in error_str or "quota" in error_str or "resource_exhausted" in error_str or "request too large" in error_str:
-                logger.warning(f"Rate limit / size limit hit on {model_name}, rotating...", agent="Executor")
-                print(f">>> [WARN] Rate limit or size limit on {model_name}, rotating to next key...")
+            if "429" in error_str or "413" in error_str or "rate limit" in error_str or "quota" in error_str or "resource_exhausted" in error_str or "request too large" in error_str or "404" in error_str or "not found" in error_str or "no longer available" in error_str or "deprecated" in error_str:
+                logger.warning(f"Rate limit / model issue on {model_name}: {str(e)[:100]}, rotating...", agent="Executor")
+                print(f">>> [WARN] Rate limit or model error on {model_name}, rotating to next key...")
                 continue
-            elif "failed to call a function" in error_str or "tool_call" in error_str or "model_not_found" in error_str or "does not exist" in error_str:
+            elif "failed to call a function" in error_str or "tool_call" in error_str or "model_not_found" in error_str or "does not exist" in error_str or "invalid function calling" in error_str or "input should be a valid dictionary" in error_str:
                 # Tool calling format issue or model unavailable — try next model
                 logger.warning(f"Tool/model error on {model_name}, trying next model...", agent="Executor")
                 print(f">>> [WARN] Tool/model error on {model_name}, rotating to next model...")
@@ -833,20 +898,25 @@ def create_agent():
     return app
 
 
-def run_agent(input_str: str):
+def run_agent(input_str: str, provider: str = None, headless: bool = True):
     """
     Main entry point - runs the autonomous browser agent.
     
     Args:
         input_str: Natural language instruction
+        provider: Optional LLM provider filter ('gemini', 'groq', 'sambanova', 'ollama')
+        headless: Whether to run browser in headless mode (default: True)
         
     Returns:
-        Dict with 'output' or 'error' key
+        Dict with 'output', 'plan', 'output_content' or 'error' key
     """
     import time as _time
     _run_start = _time.time()
     logger.separator("AGENT RUN STARTED")
     logger.info(f"User Input: {input_str[:200]}", agent="Main")
+    
+    # Set headless mode
+    browser_manager.headless = headless
     
     state = {
         "user_input": input_str,
@@ -860,12 +930,12 @@ def run_agent(input_str: str):
         "output_agent_messages": [],
         "output_content": [],
         "Output": "",
-        "llm_provider": None  # Use all providers with rotation
+        "llm_provider": provider  # None = use all providers with rotation
     }
     
     try:
         app = create_agent()
-        response = app.invoke(state)
+        response = app.invoke(state, config={"recursion_limit": 100})
         
         for key, value in response.items():
             print(">>>>", key)
@@ -874,7 +944,28 @@ def run_agent(input_str: str):
         
         logger.agent_complete("Main", f"Agent run finished", (_time.time() - _run_start) * 1000)
         logger.separator("AGENT RUN COMPLETED")
-        return {"output": response["Output"]}
+        
+        # Get the final output, with fallbacks
+        final_output = response.get("Output", "")
+        if not final_output:
+            # Fallback: use last execution message
+            exec_msgs = response.get("execution_messages", [])
+            if exec_msgs:
+                last_msg = exec_msgs[-1]
+                final_output = last_msg.content if hasattr(last_msg, 'content') else str(last_msg)
+        if not final_output:
+            # Fallback: use output_content
+            content = response.get("output_content", [])
+            if content:
+                final_output = "\n\n".join(content)
+        if not final_output:
+            final_output = "Task completed but no output was captured."
+        
+        return {
+            "output": final_output,
+            "plan": response.get("plan", []),
+            "output_content": response.get("output_content", []),
+        }
     except Exception as e:
         logger.error(f"Fatal error: {e}", agent="Main", exc_info=True)
         print(f"An error occurred during execution: {e}")

@@ -10,7 +10,7 @@ from langchain_core.tools import tool
 
 def extract_json_from_markdown(text) -> str:
     """
-    Extract JSON from markdown code blocks like ```json ... ```
+    Extract JSON from markdown code blocks or raw text, handling trailing data.
     
     Args:
         text: Text potentially containing JSON in markdown code blocks
@@ -20,16 +20,58 @@ def extract_json_from_markdown(text) -> str:
     """
     if not text:
         return "{}"
-    text = str(text)
-    # Try to find JSON in markdown code blocks
-    pattern = r'```(?:json)?\s*\n?(.*?)\n?```'
-    match = re.search(pattern, text, re.DOTALL)
-    
-    if match:
-        return match.group(1).strip()
-    
-    # If no markdown blocks found, return the original text
-    return text.strip()
+    text = str(text).strip()
+
+    # 1. Try markdown code block: ```json ... ```
+    md_match = re.search(r'```(?:json)?\s*\n?(.*?)\n?```', text, re.DOTALL)
+    if md_match:
+        candidate = md_match.group(1).strip()
+        try:
+            json.loads(candidate)
+            return candidate
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    # 2. Try parsing the full text as-is
+    try:
+        json.loads(text)
+        return text
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # 3. Extract the first complete JSON object {...} using brace matching
+    start = text.find('{')
+    if start != -1:
+        depth = 0
+        in_string = False
+        escape_next = False
+        for i in range(start, len(text)):
+            ch = text[i]
+            if escape_next:
+                escape_next = False
+                continue
+            if ch == '\\' and in_string:
+                escape_next = True
+                continue
+            if ch == '"' and not escape_next:
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if ch == '{':
+                depth += 1
+            elif ch == '}':
+                depth -= 1
+                if depth == 0:
+                    candidate = text[start:i + 1]
+                    try:
+                        json.loads(candidate)
+                        return candidate
+                    except (json.JSONDecodeError, ValueError):
+                        break
+
+    # 4. Fallback
+    return text
 
 
 @tool

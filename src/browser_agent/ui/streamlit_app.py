@@ -94,13 +94,13 @@ with tab1:
         execute_button = st.button(
             "▶ Execute Task",
             type="primary",
-            use_container_width=True
+            width="stretch"
         )
     
     with col2:
         reset_button = st.button(
             "🔄 Reset",
-            use_container_width=True
+            width="stretch"
         )
     
     if reset_button:
@@ -198,12 +198,12 @@ with tab3:
         
         st.dataframe(
             history_display,
-            use_container_width=True,
+            width="stretch",
             hide_index=True
         )
         
         # Clear history button
-        if st.button("🗑 Clear History", use_container_width=True):
+        if st.button("🗑 Clear History", width="stretch"):
             st.session_state.execution_history = []
             st.rerun()
     else:

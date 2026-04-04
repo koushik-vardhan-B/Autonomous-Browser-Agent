@@ -12,8 +12,6 @@ def enable_vision_overlay():
     RETURNS: A summary count. DOES NOT return the full list to save tokens.
     You MUST use `find_element_ids(query)` after this to get specific IDs.
     """
-    
-    global SOM_STATE
     page = browser_manager.get_page()
     if not page: return "Error: No page open"
 
@@ -85,7 +83,7 @@ def enable_vision_overlay():
         """)
         
         
-        SOM_STATE = elements_data
+        set_som_state(elements_data)
         
         return f"Success: Overlay enabled. {len(elements_data)} elements indexed in memory. Use 'find_element_ids' to find specific items."
 
@@ -103,16 +101,15 @@ def find_element_ids(query: str) -> str:
     Returns:
         A list of matching Element IDs and their text.
     """
-
-    global SOM_STATE
-    if not SOM_STATE:
+    som_data = get_som_state()
+    if not som_data:
         return "Error: No elements indexed. Run 'enable_vision_overlay' first."
     
     query = query.lower().strip()
     matches = []
     
    
-    for el in SOM_STATE:
+    for el in som_data:
        
         content = f"{el['tag']} {el['type']} {el['text']}".lower()
         

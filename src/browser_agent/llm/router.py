@@ -111,7 +111,7 @@ class LLMRouter:
         Get LLM instances optimized for TOOL CALLING / execution tasks.
         Uses dedicated tool-use models where available.
         
-        - Gemini: gemini-2.0-flash (supports tool calling natively)
+        - Gemini: gemini-2.5-flash (supports tool calling natively)
         - Groq: llama-3-groq-70b-tool-use (dedicated tool-use model)
         - SambaNova: gpt-oss-120b (default)
         
@@ -134,14 +134,14 @@ class LLMRouter:
                 except Exception as e:
                     print(f"[ERROR] Failed to initialize gemini_llm{idx}: {e}")
         
-        # Groq — use dedicated tool-use model
+        # Groq — use Llama 4 Scout for tool calling (confirmed working)
         if provider is None or provider == "groq":
             groq_keys = api_key_rotator.get_groq_keys()
             for idx, key in enumerate(groq_keys, start=1):
                 try:
                     llm = self.groq_provider.get_model(
                         api_key=key,
-                        model="llama-3.3-70b-versatile"
+                        model="meta-llama/llama-4-scout-17b-16e-instruct"
                     )
                     rotation_list.append((f"groq_tool{idx}", llm))
                 except Exception as e:
@@ -181,10 +181,10 @@ class LLMRouter:
     ) -> List[Tuple[str, BaseChatModel]]:
         """
         Get vision LLM instances with rotation.
-        Priority: Ollama (if available) -> Groq rotation
+        Priority: Ollama (if available) -> Gemini (multimodal) -> Groq
         
         Args:
-            start_index: Starting index for Groq rotation (from state)
+            start_index: Starting index for rotation (from state)
             
         Returns:
             List of (model_name, llm_instance) tuples to try in order
@@ -200,7 +200,19 @@ class LLMRouter:
             except Exception as e:
                 print(f"[ERROR] Failed to initialize Ollama vision: {e}")
         
-        # Add Groq vision keys as fallback
+        # Gemini Flash (multimodal — supports text + image natively)
+        gemini_keys = api_key_rotator.get_gemini_keys()
+        for idx, key in enumerate(gemini_keys, start=1):
+            try:
+                llm = self.gemini_provider.get_model(
+                    api_key=key,
+                    model="gemini-2.5-flash"
+                )
+                rotation_list.append((f"gemini_vision{idx}", llm))
+            except Exception as e:
+                print(f"[ERROR] Failed to initialize gemini_vision{idx}: {e}")
+        
+        # Groq vision as fallback
         groq_keys = api_key_rotator.get_groq_keys()
         for idx, key in enumerate(groq_keys, start=1):
             try:
@@ -213,7 +225,7 @@ class LLMRouter:
                 print(f"[ERROR] Failed to initialize groq_llm{idx} vision: {e}")
         
         if not rotation_list:
-            raise ValueError("No valid vision LLM available (Ollama or Groq)")
+            raise ValueError("No valid vision LLM available (Ollama, Gemini, or Groq)")
         
         # Rotate based on start_index (only affects Groq keys if Ollama failed)
         if start_index > 0 and len(rotation_list) > 1:

@@ -1,5 +1,5 @@
 """
-Browser analysis tools for selector extraction, vision analysis, and scraping.
+Browser analysis tools for selector extraction, vision analysis, scraping, and page observation.
 """
 
 from .helpers import (
@@ -16,6 +16,8 @@ from .vision import analyze_using_vision
 
 from .scraping import scrape_data_using_text
 
+from .screenshot_observer import observe_page
+
 __all__ = [
     # Browser helpers
     "ask_human_help",
@@ -31,5 +33,9 @@ __all__ = [
     "analyze_using_vision",
     
     # Text scraping
-    "scrape_data_using_text"
+    "scrape_data_using_text",
+    
+    # Page observation (vision-based)
+    "observe_page"
 ]
+

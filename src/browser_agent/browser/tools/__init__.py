@@ -8,6 +8,7 @@ from .interaction import (
     select_dropdown_option, open_dropdown_and_select, select_native_select_option
 )
 from .navigation import scroll_one_screen, scroll_to_bottom
+from .smart_interact import smart_click, smart_type
 
 # All tools in one list - useful for passing to an agent
 ALL_TOOLS = [
@@ -31,4 +32,7 @@ ALL_TOOLS = [
     select_native_select_option,
     scroll_one_screen,
     scroll_to_bottom,
+    # Smart interaction (vision-aware)
+    smart_click,
+    smart_type,
 ]
