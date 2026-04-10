@@ -2,6 +2,7 @@
 from socket import timeout
 from sys import _current_exceptions
 from playwright.sync_api import sync_playwright, Page, BrowserContext
+from playwright_stealth import Stealth
 from typing import Optional
 import os
 from browser_agent.observability.logger import get_logger
@@ -63,16 +64,34 @@ class BrowserManager:
             self._browser = self._playwright.chromium.launch_persistent_context(
                 user_data_dir = user_data_dir,
                 headless = self._headless_mode,
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/131.0.0.0 Safari/537.36"
+                ),
                 args=[
                     "--start-maximized",
                     "--no-sandbox",
-                    "--disable-blink-features=AutomationControlled"
+                    "--disable-blink-features=AutomationControlled",
+                    "--disable-infobars",
+                    "--disable-dev-shm-usage",
                 ],
-                viewport = None
+                viewport = None,
+                locale="en-US",
+                timezone_id="America/New_York",
+                ignore_https_errors=True,
             )
 
             self._current_site_name = safe_site_name
             self._page = self._browser.pages[0]
+
+            # ── Apply Stealth Mode ──
+            # Patches navigator.webdriver, chrome.runtime, plugin arrays,
+            # languages, WebGL vendor, and other fingerprint vectors.
+            _stealth = Stealth()
+            _stealth.use_sync(self._browser)
+            _logger.info("Stealth mode applied", agent="Browser")
+
             self._page.goto(url, wait_until="domcontentloaded", timeout=60000)
 
             _logger.info(f"Browser launched for '{safe_site_name}' -> {url}", agent="Browser")
@@ -88,15 +107,20 @@ class BrowserManager:
         _logger.info("Closing browser...", agent="Browser")
         try:
             if self._page:
-                try: self._page.close()
-                except: pass
+                try:
+                    self._page.close()
+                except Exception as e:
+                    _logger.warning(f"Error closing page: {e}", agent="Browser")
             if self._browser:
                 try:
                     self._browser.close()
-                except: pass
+                except Exception as e:
+                    _logger.warning(f"Error closing browser context: {e}", agent="Browser")
             if self._playwright:
-                try: self._playwright.stop()
-                except: pass
+                try:
+                    self._playwright.stop()
+                except Exception as e:
+                    _logger.warning(f"Error stopping Playwright: {e}", agent="Browser")
 
             self._page = None
             self._browser = None

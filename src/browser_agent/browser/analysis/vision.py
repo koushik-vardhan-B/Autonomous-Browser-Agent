@@ -3,7 +3,6 @@ Vision-based analysis strategy using screenshots and vision LLMs.
 """
 
 import os
-import time
 import base64
 from typing import Optional, Literal
 from langchain_core.tools import tool
@@ -61,8 +60,8 @@ def analyze_using_vision(
             page.screenshot(path=path)
             screenshot_paths.append(path)
             
-            page.evaluate("window.scrollBy(0, window.innerHeight)")
-            time.sleep(1)  # Wait for scroll animation
+            page.mouse.wheel(0, 700)
+            page.wait_for_timeout(800)  # Wait for scroll animation to render
             
     except Exception as e:
         print(f"Error extracting screenshots: {str(e)}")

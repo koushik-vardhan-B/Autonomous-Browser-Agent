@@ -7,7 +7,8 @@ def scroll_one_screen():
     page = browser_manager.get_page()
     if page:
         page.mouse.wheel(0, 600)
-        return "Scroll down."
+        page.wait_for_timeout(500)
+        return "Scrolled down one screen."
     return "No browser open."
 
 @tool
@@ -17,7 +18,8 @@ def scroll_to_bottom():
     if not page:
         return "Error: No browser page is open"
     try:
-        page.evaluate("() => window.scrollTo(0, document.body.scrollHeight)")
+        page.evaluate("() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })")
+        page.wait_for_timeout(1200)
         return "Scrolled to bottom"
     except Exception as e:
         return f"Error scrolling: {str(e)}"

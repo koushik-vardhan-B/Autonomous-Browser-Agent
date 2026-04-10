@@ -192,7 +192,8 @@ def central_agent1(state):
         try:
             raw_text = browser_manager.get_page().evaluate("document.body.innerText")[:1000]
             current_page_state = f"Page Title: {browser_manager.get_page().title()}\nVisible Text Snippet: {raw_text}..."
-        except:
+        except Exception as e:
+            logger.debug(f"Could not read page state: {e}", agent="Planner")
             current_page_state = "Browser is open but page content is unreadable."
     else:
         current_page_state = "Browser is NOT open. First step must be 'Open Browser'."
@@ -474,7 +475,7 @@ def redirector(state):
             goto="planner"
         )
     elif step["agent"] == "RAG":
-        message_content = step["rag_message"] or step["query"]
+        message_content = step.get("rag_message") or step.get("query", "")
         new_msg = HumanMessage(content=message_content)
         return Command(goto="rag_agent", update={**next_step_update, "rag_messages": [new_msg]})
     elif step["agent"] == "EXECUTION":
@@ -589,7 +590,7 @@ def execution_agent(state):
                 agent=agent,
                 tools=tools,
                 verbose=True,
-                max_iterations=50,  # v5 needs more iterations for Think→Act→Observe loop
+                max_iterations=20,
                 handle_parsing_errors=True,
                 return_intermediate_steps=True
             )
@@ -626,7 +627,9 @@ def execution_agent(state):
             
             if "intermediate_steps" in result:
                 for action, observation in result["intermediate_steps"]:
-                    if action.tool in ["scrape_data_using_text", "analyze_using_vision", "extract_and_analyze_selectors", "observe_page"]:
+                    # Only capture actual data extraction tools — NOT observe_page which
+                    # produces navigation feedback that pollutes the final output.
+                    if action.tool in ["scrape_data_using_text", "analyze_using_vision", "extract_and_analyze_selectors"]:
                         content = json.dumps(observation) if isinstance(observation, (dict, list)) else str(observation)
                         extracted_data.append(content)
 
@@ -901,12 +904,12 @@ def create_agent():
 def run_agent(input_str: str, provider: str = None, headless: bool = True):
     """
     Main entry point - runs the autonomous browser agent.
-    
+
     Args:
         input_str: Natural language instruction
         provider: Optional LLM provider filter ('gemini', 'groq', 'sambanova', 'ollama')
         headless: Whether to run browser in headless mode (default: True)
-        
+
     Returns:
         Dict with 'output', 'plan', 'output_content' or 'error' key
     """
@@ -936,11 +939,6 @@ def run_agent(input_str: str, provider: str = None, headless: bool = True):
     try:
         app = create_agent()
         response = app.invoke(state, config={"recursion_limit": 100})
-        
-        for key, value in response.items():
-            print(">>>>", key)
-            print(value)
-            print("#" * 100)
         
         logger.agent_complete("Main", f"Agent run finished", (_time.time() - _run_start) * 1000)
         logger.separator("AGENT RUN COMPLETED")

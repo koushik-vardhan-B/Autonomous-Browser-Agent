@@ -190,17 +190,8 @@ class LLMRouter:
             List of (model_name, llm_instance) tuples to try in order
         """
         rotation_list = []
-        
-        # Check Ollama first (local, no rate limits)
-        if OllamaProvider.check_availability():
-            try:
-                llm = self.ollama_provider.get_model(model="llama3.2-vision:11b")
-                rotation_list.append(("ollama_vision", llm))
-                print(">>> [OK] Added Ollama to vision rotation (priority)")
-            except Exception as e:
-                print(f"[ERROR] Failed to initialize Ollama vision: {e}")
-        
-        # Gemini Flash (multimodal — supports text + image natively)
+
+        # Gemini Flash (primary vision model — multimodal, supports text + image natively)
         gemini_keys = api_key_rotator.get_gemini_keys()
         for idx, key in enumerate(gemini_keys, start=1):
             try:
@@ -211,7 +202,7 @@ class LLMRouter:
                 rotation_list.append((f"gemini_vision{idx}", llm))
             except Exception as e:
                 print(f"[ERROR] Failed to initialize gemini_vision{idx}: {e}")
-        
+
         # Groq vision as fallback
         groq_keys = api_key_rotator.get_groq_keys()
         for idx, key in enumerate(groq_keys, start=1):
@@ -223,9 +214,9 @@ class LLMRouter:
                 rotation_list.append((f"groq_llm{idx}_vision", llm))
             except Exception as e:
                 print(f"[ERROR] Failed to initialize groq_llm{idx} vision: {e}")
-        
+
         if not rotation_list:
-            raise ValueError("No valid vision LLM available (Ollama, Gemini, or Groq)")
+            raise ValueError("No valid vision LLM available (Gemini or Groq)")
         
         # Rotate based on start_index (only affects Groq keys if Ollama failed)
         if start_index > 0 and len(rotation_list) > 1:
@@ -245,21 +236,13 @@ class LLMRouter:
     
     def get_vision_llm(self) -> BaseChatModel:
         """
-        Legacy method: Returns Ollama or Groq vision LLM (no rotation).
+        Legacy method: Returns Gemini vision LLM (no rotation).
         For backward compatibility only.
         """
-        if OllamaProvider.check_availability():
-            print(">>> Using Local Ollama for Vision.")
-            return self.ollama_provider.get_model(model="llama3.2-vision:11b")
-        else:
-            print(">>> Ollama not available. Falling back to Groq for Vision.")
-            api_key = os.getenv("GROQ_API_KEY")
-            if not api_key:
-                raise ValueError("CRITICAL: No Groq API Key found (checked 'GROQ_API_KEY'). Please set it in .env")
-            return self.groq_provider.get_model(
-                api_key=api_key,
-                model="llama-3.2-90b-vision-preview"
-            )
+        api_key = os.getenv("GOOGLE_API_KEY1") or os.getenv("GOOGLE_API_KEY")
+        if not api_key:
+            raise ValueError("CRITICAL: No Gemini API Key found. Set GOOGLE_API_KEY1 in .env")
+        return self.gemini_provider.get_model(api_key=api_key, model="gemini-2.5-flash")
 
 
 # Global singleton instance (backward compatibility with original LLMConfig)
