@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Autonomous Browser Agent - UML Diagrams</title>
+    <!-- Use Mermaid JS directly from a CDN -->
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+      mermaid.initialize({ startOnLoad: true, theme: 'default', securityLevel: 'loose' });
+    </script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f9f9f9; padding: 20px; color: #333; }
+        .diagram-container { background: #fff; padding: 20px; margin-bottom: 40px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; }
+        h1 { text-align: center; color: #2c3e50; }
+        h2 { color: #34495e; border-bottom: 2px solid #eee; padding-bottom: 10px; text-align: left; }
+        .instruction { text-align: center; margin-bottom: 30px; font-size: 1.1em; color: #666; }
+        .mermaid { display: flex; justify-content: center; }
+    </style>
+</head>
+<body>
+
+    <h1>Project Report Diagrams</h1>
+    <p class="instruction">
+        <strong>Instructions:</strong> These are the 7 diagrams for your project report. Zoom in (Ctrl + or Cmd +) if needed, then take a screenshot of each diagram (e.g. using Windows Snipping Tool) and paste them into the <code>[PLACEHOLDER]</code> spots in your Word document.
+    </p>
+
+    <!-- 1. System Architecture Diagram -->
+    <div class="diagram-container">
+        <h2>1. System Architecture Diagram (Section 4.1)</h2>
+        <div class="mermaid">
+        flowchart TD
+            subgraph User Layer [1. User Interface Layer]
+                CLI[Command Line Interface]
+                API[FastAPI Endpoint]
+                UI[Streamlit Web Dashboard]
+            end
+
+            subgraph Orchestration Layer [2. Orchestration Layer - LangGraph]
+                Planner[Planner Agent]
+                Redirector[Redirector / Traffic Control]
+                Executor[Execution Agent]
+                Formatter[Output Formatting Agent]
+            end
+
+            subgraph Intelligence Layer [3. Intelligence Layer - LLM Router]
+                Router[LLM Router & Key Rotator]
+                Gemini[Google Gemini 2.5]
+                Groq[Groq Llama 4 Scout]
+            end
+
+            subgraph Browser Layer [4. Browser Interaction Layer]
+                Manager[Browser Manager]
+                Playwright[Playwright Engine]
+                DOM[DOM Distillation/Extraction]
+            end
+
+            subgraph Memory Layer [5. Memory Layer]
+                RAG[RAG Agent]
+                Chroma[ChromaDB Vector Store]
+            end
+
+            User((User)) <--> CLI
+            User <--> API
+            User <--> UI
+
+            CLI --> Planner
+            API --> Planner
+            UI --> Planner
+
+            Planner <--> Redirector
+            Redirector <--> Executor
+            Redirector <--> Formatter
+            Redirector <--> RAG
+
+            Planner <--> Router
+            Executor <--> Router
+            Formatter <--> Router
+
+            Router --> Gemini
+            Router --> Groq
+
+            Executor <--> Manager
+            Manager <--> Playwright
+            Playwright <--> DOM
+            DOM --> |"Website"| Web[(Target Websites)]
+
+            RAG <--> Chroma
+        </div>
+    </div>
+
+    <!-- 2. LangGraph Workflow Graph -->
+    <div class="diagram-container">
+        <h2>2. LangGraph Workflow Graph (Section 4.2)</h2>
+        <div class="mermaid">
+        stateDiagram-v2
+            [*] --> START
+            START --> planner
+
+            state planner {
+                [*] --> Generate_Plan
+            }
+
+            planner --> redirector
+
+            state redirector {
+                [*] --> Check_Next_Step
+            }
+
+            redirector --> executor : agent='EXECUTION'
+            redirector --> output_agent : agent='OUTPUT_FORMATTING'
+            redirector --> rag_agent : agent='RAG'
+            redirector --> planner : agent='PLANNER' or Re-plan (Error)
+            redirector --> END : agent='end' or Empty
+
+            executor --> redirector
+            output_agent --> redirector
+            rag_agent --> redirector
+
+            END --> [*]
+        </div>
+    </div>
+
+    <!-- 3. Level 0 and Level 1 Data Flow Diagram (Combined Representation) -->
+    <div class="diagram-container">
+        <h2>3. Data Flow Diagram (Section 4.3)</h2>
+        <div class="mermaid">
+        flowchart LR
+            U((User)) -- "1. Natural Language Objective" --> P1(1.0 Plan Generation)
+            P1 -- "2. Structured JSON Plan" --> P2(2.0 Step Routing)
+            P2 -- "3. Execution Instruction" --> P3(3.0 Browser Execution)
+            
+            P3 -- "4. Browser Actions" --> Target[(Target Website)]
+            Target -- "5. Raw HTML / Page State" --> P3
+            
+            P3 -- "6. Extracted Data / Observation" --> P4(4.0 Data Formatting)
+            P3 -- "Execution Error" --> P5(5.0 Memory Management)
+            
+            P4 -- "7. Formatted Results" --> U
+            
+            P1 <--> LLM((LLM APIs))
+            P3 <--> LLM
+            P4 <--> LLM
+            
+            P5 <--> DB[(D2: ChromaDB Memory)]
+            P1 <-- "Historical Errors" --> P5
+            
+            D1[(D1: Agent State)]
+            P1 -.-> |"Update Plan"| D1
+            P2 -.-> |"Read Index"| D1
+            P3 -.-> |"Update Context"| D1
+        </div>
+    </div>
+
+    <!-- 4. Use Case Diagram -->
+    <div class="diagram-container">
+        <h2>4. Use Case Diagram (Section 4.4.1)</h2>
+        <div class="mermaid">
+        flowchart LR
+            User((User))
+            TargetWeb((Target Website))
+            LLM((LLM APIs))
+
+            subgraph Autonomous Browser Agent System
+                UC1([UC1: Submit Task])
+                UC2([UC2: Generate Plan])
+                UC3([UC3: Execute Browser Action])
+                UC4([UC4: Extract Data])
+                UC5([UC5: Handle Error / Re-plan])
+                UC6([UC6: Format Output])
+                UC7([UC7: Monitor Progress])
+            end
+
+            User --- UC1
+            User --- UC7
+            
+            UC1 --> UC2
+            UC2 --- LLM
+            
+            UC2 --> UC3
+            UC3 --- TargetWeb
+            UC3 --- LLM
+
+            UC3 --> UC4
+            UC4 --- TargetWeb
+
+            UC3 -.->|extends if failed| UC5
+            UC5 --- LLM
+
+            UC4 --> UC6
+            UC6([UC6: Format Output]) --- LLM
+            UC6 --> User
+        </div>
+    </div>
+
+    <!-- 5. Class Diagram -->
+    <div class="diagram-container">
+        <h2>5. Class Diagram (Section 4.4.2)</h2>
+        <div class="mermaid">
+        classDiagram
+            class BrowserManager {
+                -BrowserManager instance
+                -BrowserContext browser
+                -Page page
+                -Boolean headless
+                +start_browser()
+                +close_browser()
+                +get_page()
+            }
+
+            class LLMRouter {
+                -LLMRouter instance
+                +Object gemini_provider
+                +Object groq_provider
+                +get_main_llm()
+                +get_execution_llm()
+            }
+
+            class APIKeyRotator {
+                -List gemini_keys
+                -List groq_keys
+                +get_gemini_keys()
+                +rotate_keys()
+            }
+
+            class AgentState {
+                +String user_input
+                +List plan
+                +Integer step_index
+                +String current_url
+                +Object extracted_data
+            }
+
+            class SupervisorOutput {
+                +List target_urls
+                +List site_names
+                +List steps
+            }
+
+            class Step {
+                +Integer step_number
+                +String agent
+                +String query
+            }
+
+            SupervisorOutput *-- Step : contains
+            LLMRouter --> APIKeyRotator : uses
+        </div>
+    </div>
+
+    <!-- 6. Sequence Diagram -->
+    <div class="diagram-container">
+        <h2>6. Sequence Diagram (Section 4.4.3)</h2>
+        <div class="mermaid">
+        sequenceDiagram
+            actor User
+            participant Main as main.py
+            participant Orchestrator as LangGraph
+            participant Planner as Planner Agent
+            participant LLM as API (Gemini/Groq)
+            participant Executor as Execution Agent
+            participant Browser as Playwright / Web
+
+            User->>Main: "Find iPhone 16 price on Amazon"
+            Main->>Orchestrator: run_agent()
+            Orchestrator->>Planner: Route to Planner
+            Planner->>LLM: Generate plan prompt
+            LLM-->>Planner: JSON Plan (3 steps)
+            Planner-->>Orchestrator: Plan ready (step 1)
+            
+            Orchestrator->>Executor: Step 1: Open Amazon
+            Executor->>LLM: ReAct Loop (Tool calling)
+            LLM-->>Executor: Action: open_browser()
+            Executor->>Browser: playwright.goto("amazon.com")
+            Browser-->>Executor: DOM Rendered & Distilled
+            Executor-->>Orchestrator: Step 1 Complete
+
+            Orchestrator->>Executor: Step 2: Search "iPhone 16"
+            Executor->>LLM: ReAct Loop
+            LLM-->>Executor: Action: type() & click()
+            Executor->>Browser: Fill searchbar, click search
+            Browser-->>Executor: Search Results DOM
+            Executor-->>Orchestrator: Step 2 Complete
+            
+            Orchestrator->>Main: Return Final Result
+            Main-->>User: "iPhone 16 price is $799"
+        </div>
+    </div>
+
+    <!-- 7. Activity Diagram -->
+    <div class="diagram-container">
+        <h2>7. Activity Diagram (Section 4.4.4)</h2>
+        <div class="mermaid">
+        flowchart TD
+            Start((Start)) --> UserInput[Receive User Input]
+            UserInput --> GeneratePlan[Planner Generates JSON Plan]
+            GeneratePlan --> ValidPlan{Plan Valid?}
+            
+            ValidPlan -- No --> ErrorEnd((End with Error))
+            ValidPlan -- Yes --> CheckStep[Redirector: Check Agent Type]
+            
+            CheckStep --> |agent='EXECUTION'| ExecWait[Execution Agent]
+            ExecWait --> ActBrowser[Act on Browser]
+            ActBrowser --> IsSuccess{Success?}
+            
+            IsSuccess -- Yes --> NextStep[Advance Step Index]
+            IsSuccess -- No --> CaptureError[Capture Error]
+            CaptureError --> Replan[Pass Error Context to Planner]
+            Replan --> GeneratePlan
+            
+            CheckStep --> |agent='OUTPUT_FORMATTING'| Format[Formatter Agent]
+            Format --> NextStep
+            
+            CheckStep --> |agent='RAG'| RAGNode[RAG Agent: Store/Retrieve]
+            RAGNode --> NextStep
+            
+            CheckStep --> |agent='PLANNER'| Replan
+            
+            NextStep --> HasMore{More Steps?}
+            HasMore -- Yes --> CheckStep
+            HasMore -- No --> Done[Compile Final Output]
+            
+            CheckStep --> |agent='end'| Done
+            
+            Done --> DisplayOutput[Return Result to User]
+            DisplayOutput --> End((End))
+        </div>
+    </div>
+
+</body>
+</html>

@@ -402,7 +402,7 @@ THE CURRENT PAGE STATE IS:
             error_str = str(e).lower()
             last_error = str(e)
             
-            if "429" in error_str or "413" in error_str or "rate limit" in error_str or "quota" in error_str or "resource_exhausted" in error_str or "request too large" in error_str or "empty output" in error_str or "extra data" in error_str or "expecting value" in error_str or "jsondecodeerror" in error_str or "404" in error_str or "not found" in error_str or "no longer available" in error_str or "does not exist" in error_str or "model_not_found" in error_str or "deprecated" in error_str:
+            if "429" in error_str or "413" in error_str or "403" in error_str or "rate limit" in error_str or "quota" in error_str or "resource_exhausted" in error_str or "request too large" in error_str or "permission" in error_str or "denied" in error_str or "billing" in error_str or "empty output" in error_str or "extra data" in error_str or "expecting value" in error_str or "jsondecodeerror" in error_str or "404" in error_str or "not found" in error_str or "no longer available" in error_str or "does not exist" in error_str or "model_not_found" in error_str or "deprecated" in error_str:
                 logger.warning(f"Rate limit / model issue on {model_name}: {str(e)[:100]}, rotating...", agent="Planner")
                 print(f">>> [WARN] Transient/model error on {model_name}, rotating to next key...")
                 continue
@@ -627,13 +627,19 @@ def execution_agent(state):
             
             if "intermediate_steps" in result:
                 for action, observation in result["intermediate_steps"]:
-                    # Only capture actual data extraction tools — NOT observe_page which
-                    # produces navigation feedback that pollutes the final output.
+                    # Only capture actual data extraction tools
                     if action.tool in ["scrape_data_using_text", "analyze_using_vision", "extract_and_analyze_selectors"]:
                         content = json.dumps(observation) if isinstance(observation, (dict, list)) else str(observation)
+                        # Filter out error responses — don't save tool errors as "extracted data"
+                        content_lower = content.lower()
+                        if "error" in content_lower and ("403" in content_lower or "429" in content_lower or "failed" in content_lower or "denied" in content_lower):
+                            print(f">>> [SKIP] Filtering out error result from {action.tool}")
+                            continue
                         extracted_data.append(content)
 
-            if not extracted_data and len(output_text) > 20 and ("{" in output_text or "[" in output_text):
+            # If extraction tools failed but the agent manually extracted data in its output text,
+            # use that instead — the agent often reads the page text and formats results itself
+            if not extracted_data and len(output_text) > 20:
                 extracted_data = [output_text]
 
             if extracted_data:
@@ -645,14 +651,14 @@ def execution_agent(state):
             error_str = str(e).lower()
             last_error = str(e)
             
-            if "429" in error_str or "413" in error_str or "rate limit" in error_str or "quota" in error_str or "resource_exhausted" in error_str or "request too large" in error_str or "404" in error_str or "not found" in error_str or "no longer available" in error_str or "deprecated" in error_str:
+            if "429" in error_str or "413" in error_str or "403" in error_str or "rate limit" in error_str or "quota" in error_str or "resource_exhausted" in error_str or "request too large" in error_str or "permission" in error_str or "denied" in error_str or "billing" in error_str or "404" in error_str or "not found" in error_str or "no longer available" in error_str or "deprecated" in error_str:
                 logger.warning(f"Rate limit / model issue on {model_name}: {str(e)[:100]}, rotating...", agent="Executor")
                 print(f">>> [WARN] Rate limit or model error on {model_name}, rotating to next key...")
                 continue
             elif "failed to call a function" in error_str or "tool_call" in error_str or "model_not_found" in error_str or "does not exist" in error_str or "invalid function calling" in error_str or "input should be a valid dictionary" in error_str:
                 # Tool calling format issue or model unavailable — try next model
-                logger.warning(f"Tool/model error on {model_name}, trying next model...", agent="Executor")
-                print(f">>> [WARN] Tool/model error on {model_name}, rotating to next model...")
+                logger.warning(f"Tool/model error on {model_name}: {str(e)[:150]}, trying next model...", agent="Executor")
+                print(f">>> [WARN] Tool/model error on {model_name}: {str(e)[:200]}")
                 continue
             else:
                 error_msg = f"AGENT CRASHED: {str(e)}"

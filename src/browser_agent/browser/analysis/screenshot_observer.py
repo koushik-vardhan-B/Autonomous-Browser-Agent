@@ -88,7 +88,7 @@ Be specific and actionable. Mention exact text on buttons/links when visible."""
             
         except Exception as e:
             error_str = str(e).lower()
-            if any(k in error_str for k in ["429", "rate limit", "quota", "resource_exhausted"]):
+            if any(k in error_str for k in ["429", "403", "rate limit", "quota", "resource_exhausted", "permission", "denied", "billing"]):
                 print(f">>> [WARN] Rate limit on {model_name}, rotating...")
                 continue
             else:

@@ -68,7 +68,8 @@ class LLMRouter:
             groq_keys = api_key_rotator.get_groq_keys()
             for idx, key in enumerate(groq_keys, start=1):
                 try:
-                    llm = self.groq_provider.get_model(api_key=key)
+                    # Use llama-4-scout for tool calling (planner uses create_tool_calling_agent)
+                    llm = self.groq_provider.get_model(api_key=key, model="meta-llama/llama-4-scout-17b-16e-instruct")
                     rotation_list.append((f"groq_llm{idx}", llm))
                 except Exception as e:
                     print(f"[ERROR] Failed to initialize groq_llm{idx}: {e}")

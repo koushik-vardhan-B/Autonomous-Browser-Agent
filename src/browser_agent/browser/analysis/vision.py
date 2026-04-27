@@ -141,7 +141,7 @@ def analyze_using_vision(
             error_str = str(e).lower()
             
             # Check if it's a rate limit error
-            if "429" in error_str or "rate limit" in error_str or "quota" in error_str or "resource_exhausted" in error_str:
+            if "429" in error_str or "403" in error_str or "rate limit" in error_str or "quota" in error_str or "resource_exhausted" in error_str or "permission" in error_str or "denied" in error_str or "billing" in error_str:
                 print(f">>> [WARN] Rate limit hit on {model_name}, rotating to next key...")
                 continue  # Try next LLM
             else:
